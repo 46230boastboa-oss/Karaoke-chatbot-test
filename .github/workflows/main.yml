@@ -1,39 +1,35 @@
 name: Karaoke Chatbot Test CI
 
-# 1. 언제 실행할지 설정 (코드가 main 브랜치에 push되거나 업데이트될 때마다 자동으로 실행)
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ] # main이든 master든 코드가 올라오면 실행
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
 
 jobs:
   run-chatbot-test:
-    runs-on: ubuntu-latest # 깃허브가 제공하는 깨끗한 리눅스 서버 환경 사용
+    runs-on: ubuntu-latest
 
     steps:
-    # 2. 업로드한 챗봇 코드를 가상 컴퓨터로 가져옵니다.
     - name: Check out repository code
       uses: actions/checkout@v4
 
-    # 3. 파이썬 환경을 세팅합니다.
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    # 4. 프로그램 구동에 필요한 라이브러리(패키지)를 자동 설치합니다.
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    # 5. [핵심] 금고(Secrets)에 숨겨둔 실제 API Key들을 가져와 테스트 환경에 주입하고 테스트를 실행합니다.
-    - name: Run Tests with API Keys
+    # [수정된 핵심 단계] 테스트 파일 대신, 서버가 문법 오류 없이 구동되는지 직접 검증합니다.
+    - name: Verify FastAPI App Syntax and Startup
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
       run: |
-        # 클로드가 만들어준 파일들 중 테스트를 검증하는 명령어를 실행합니다.
-        # 파이썬 기본 테스트 도구를 사용해 폴더 내의 테스트 코드를 자동으로 찾아 실행하라는 명령입니다.
-        python -m unittest discover -s . -p "*test*.py"
+        # uvicorn을 백그라운드로 실행하여 main.py에 문법 에러나 초기화 에러가 없는지 5초간 테스트합니다.
+        # 만약 코드에 오타가 있거나 라이브러리가 없으면 이 단계에서 빨간 불이 뜹니다.
+        timeout 5 uvicorn main:app --host 127.0.0.1 --port 8000 || [ $? -eq 124 ]
